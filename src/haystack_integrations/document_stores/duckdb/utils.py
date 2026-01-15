@@ -50,7 +50,6 @@ def to_haystack_documents(documents: list[dict[str, Any]]) -> list[Document]:
     if documents == [{}]:
         return haystack_documents
     for document in documents:
-        breakpoint()
         haystack_dict = dict(document)
         blob_data = haystack_dict.pop("blob_data", None)
         blob_meta = haystack_dict.pop("blob_meta", None)
