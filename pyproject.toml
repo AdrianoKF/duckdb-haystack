@@ -3,13 +3,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "example-store"
+name = "duckdb-store"
 dynamic = ["version"]
 description = ''
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-keywords = []
+keywords = ["DuckDB", "haystack-ai"]
 authors = [{ name = "Adrian Rumpold", email = "a.rumpold@gmail.com" }]
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -21,7 +21,7 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: Implementation :: CPython",
 ]
-dependencies = ["duckdb>=0.10.0", "haystack-ai", "typing_extensions"]
+dependencies = ["duckdb>=0.10.3", "haystack-ai", "typing_extensions"]
 
 [project.urls]
 Documentation = "https://github.com/AdrianoKF/duckdb-haystack#readme"
@@ -32,7 +32,7 @@ Source = "https://github.com/AdrianoKF/duckdb-haystack"
 packages = ["src/haystack_integrations"]
 
 [tool.hatch.version]
-path = "src/haystack_integrations/document_stores/duckdb_store/__about__.py"
+path = "src/haystack_integrations/document_stores/duckdb/__about__.py"
 
 [tool.hatch.envs.default]
 dependencies = ["coverage[toml]>=6.5", "pytest"]
@@ -126,7 +126,7 @@ parallel = true
 omit = ["src/duckdb_store/__about__.py"]
 
 [tool.coverage.paths]
-duckdb_store = ["src/duckdb_store", "*/duckdb-store/src/duckdb_store"]
+duckdb_store = ["src/duckdb_store", "*/duckdb-store/src/duckdb"]
 tests = ["tests", "*/duckdb-store/tests"]
 
 [tool.coverage.report]
@@ -141,4 +141,4 @@ module = ["haystack.*", "pytest.*", "haystack_integrations.*"]
 ignore_missing_imports = true
 
 [dependency-groups]
-dev = ["hatch>=1.16.2"]
+dev = ["hatch>=1.16.2", "pytest>=9.0.2"]
