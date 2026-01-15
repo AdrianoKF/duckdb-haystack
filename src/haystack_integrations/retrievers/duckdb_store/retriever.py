@@ -1,21 +1,22 @@
-# SPDX-FileCopyrightText: 2023-present John Doe <jd@example.com>
+# SPDX-FileCopyrightText: 2026-present Adrian Rumpold <a.rumpold@gmail.com>
 #
 # SPDX-License-Identifier: Apache-2.0
-from typing import Any, Dict, Optional
+from typing import Any
 
 from haystack import component
-from haystack_integrations.document_stores.example_store import ExampleDocumentStore
+
+from haystack_integrations.document_stores.duckdb_store import DuckDBDocumentStore
 
 
 @component
-class ExampleRetriever:
+class DuckDBRetriever:
     """
-    A component for retrieving documents from an ExampleDocumentStore.
+    A component for retrieving documents from a DuckDBDocumentStore.
     """
 
-    def __init__(self, document_store: ExampleDocumentStore, filters: Optional[Dict[str, Any]] = None, top_k: int = 10):
+    def __init__(self, document_store: DuckDBDocumentStore, filters: dict[str, Any] | None = None, top_k: int = 10):
         """
-        Create an ExampleRetriever component. Usually you pass some basic configuration
+        Create a DuckDBRetriever component. Usually you pass some basic configuration
         parameters to the constructor.
 
         :param document_store: A Document Store object used to retrieve documents

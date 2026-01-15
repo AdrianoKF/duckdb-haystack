@@ -1,6 +1,6 @@
 [![test](https://github.com/deepset-ai/document-store/actions/workflows/test.yml/badge.svg)](https://github.com/deepset-ai/document-store/actions/workflows/test.yml)
 
-# Example Store
+# DuckDB Store
 
 This Github repository is a template that can be used to create custom document stores to extend
 the new [Haystack](https://github.com/deepset-ai/haystack/) API available from version 2.0.
@@ -8,6 +8,7 @@ the new [Haystack](https://github.com/deepset-ai/haystack/) API available from v
 ## Template features
 
 By creating a new repo using this template, you'll get the following advantages:
+
 - Ready-made code layout and scaffold to build a custom document store.
 - Support for packaging and distributing the code through Python wheels using Hatch.
 - Github workflow to build and upload a package when tagging the repo.
@@ -30,7 +31,6 @@ By creating a new repo using this template, you'll get the following advantages:
 When your custom document store is ready and working, feel free to add it to the list of available
 [Haystack Integrations](https://haystack.deepset.ai/integrations) by opening a Pull Request in
 [this repo](https://github.com/deepset-ai/haystack-integrations).
-
 
 ## Test
 

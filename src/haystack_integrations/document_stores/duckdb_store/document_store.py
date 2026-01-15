@@ -1,8 +1,8 @@
-# SPDX-FileCopyrightText: 2023-present John Doe <jd@example.com>
+# SPDX-FileCopyrightText: 2026-present Adrian Rumpold <a.rumpold@gmail.com>
 #
 # SPDX-License-Identifier: Apache-2.0
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from haystack import Document, default_from_dict, default_to_dict
 from haystack.document_stores.errors import DuplicateDocumentError, MissingDocumentError
@@ -11,7 +11,7 @@ from haystack.document_stores.types import DuplicatePolicy
 logger = logging.getLogger(__name__)
 
 
-class ExampleDocumentStore:  # FIXME
+class DuckDBDocumentStore:
     """
     Except for the __init__(), signatures of any other method in this class must not change.
     """
@@ -30,7 +30,7 @@ class ExampleDocumentStore:  # FIXME
         """
         return 0  # FIXME
 
-    def filter_documents(self, _: Optional[Dict[str, Any]] = None) -> List[Document]:
+    def filter_documents(self, _: dict[str, Any] | None = None) -> list[Document]:
         """
         Returns the documents that match the filters provided.
 
@@ -98,7 +98,7 @@ class ExampleDocumentStore:  # FIXME
         """
         return []  # FIXME
 
-    def write_documents(self, documents: List[Document], policy: DuplicatePolicy = DuplicatePolicy.NONE) -> int:
+    def write_documents(self, documents: list[Document], policy: DuplicatePolicy = DuplicatePolicy.NONE) -> int:
         """
         Writes (or overwrites) documents into the store.
 
@@ -116,7 +116,7 @@ class ExampleDocumentStore:  # FIXME
                 raise DuplicateDocumentError
         return 0
 
-    def delete_documents(self, document_ids: List[str]) -> None:
+    def delete_documents(self, document_ids: list[str]) -> None:
         """
         Deletes all documents with a matching document_ids from the document store.
         Fails with `MissingDocumentError` if no document with this id is present in the store.
@@ -127,7 +127,7 @@ class ExampleDocumentStore:  # FIXME
             msg = f"ID '{doc_id}' not found, cannot delete it."
             raise MissingDocumentError(msg)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Serializes this store to a dictionary. You can customise here what goes into the
         final serialized format.
@@ -139,7 +139,7 @@ class ExampleDocumentStore:  # FIXME
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ExampleDocumentStore":
+    def from_dict(cls, data: dict[str, Any]) -> "DuckDBDocumentStore":
         """
         Deserializes the store from a dictionary, if you customised anything in `to_dict`,
         you can changed it back here.
