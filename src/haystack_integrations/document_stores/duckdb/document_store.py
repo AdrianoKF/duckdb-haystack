@@ -3,11 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 import logging
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 from haystack import Document, default_from_dict, default_to_dict
 from haystack.document_stores.errors import DuplicateDocumentError, MissingDocumentError
 from haystack.document_stores.types import DuplicatePolicy
+from typing_extensions import Any
 
 import duckdb
 from haystack_integrations.document_stores.duckdb.utils import (

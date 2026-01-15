@@ -21,7 +21,11 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: Implementation :: CPython",
 ]
-dependencies = ["duckdb>=0.10.3", "haystack-ai", "typing_extensions"]
+dependencies = [
+    "duckdb>=0.10.3",
+    "haystack-ai",
+    "typing-extensions",
+]
 
 [project.urls]
 Documentation = "https://github.com/AdrianoKF/duckdb-haystack#readme"

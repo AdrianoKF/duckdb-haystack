@@ -1,11 +1,10 @@
 # SPDX-FileCopyrightText: 2026-present Adrian Rumpold <a.rumpold@gmail.com>
 #
 # SPDX-License-Identifier: Apache-2.0
-from typing import Any
-
 from haystack import component
+from typing_extensions import Any
 
-from haystack_integrations.document_stores.duckdb_store import DuckDBDocumentStore
+from haystack_integrations.document_stores.duckdb import DuckDBDocumentStore
 
 
 @component

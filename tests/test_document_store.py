@@ -1,12 +1,11 @@
 # SPDX-FileCopyrightText: 2026-present Adrian Rumpold <a.rumpold@gmail.com>
 #
 # SPDX-License-Identifier: Apache-2.0
-from typing import override
-
 import pytest
 from haystack import Document
 from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 from haystack.testing.document_store import DocumentStoreBaseTests
+from typing_extensions import override
 
 from haystack_integrations.document_stores.duckdb import DuckDBDocumentStore
 

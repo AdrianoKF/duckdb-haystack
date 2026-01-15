@@ -1,8 +1,8 @@
 import json
 import logging
-from typing import Any
 
 from haystack.dataclasses import ByteStream, Document
+from typing_extensions import Any
 
 logger = logging.getLogger(__name__)
 
@@ -20,18 +20,12 @@ def to_duckdb_documents(documents: list[Document]) -> list[dict[str, Any]]:
 
     db_documents = []
     for document in documents:
-        db_document = {
-            k: v
-            for k, v in document.to_dict(flatten=False).items()
-            if k not in ["score", "blob"]
-        }
+        db_document = {k: v for k, v in document.to_dict(flatten=False).items() if k not in ["score", "blob"]}
 
         blob = document.blob
         db_document["blob_data"] = blob.data if blob else None
         db_document["blob_meta"] = blob.meta if blob and blob.meta else None
-        db_document["blob_mime_type"] = (
-            blob.mime_type if blob and blob.mime_type else None
-        )
+        db_document["blob_mime_type"] = blob.mime_type if blob and blob.mime_type else None
 
         if "sparse_embedding" in db_document:
             sparse_embedding = db_document.pop("sparse_embedding", None)
