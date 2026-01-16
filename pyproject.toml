@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "duckdb-store"
+name = "duckdb-haystack"
 dynamic = ["version"]
 description = ''
 readme = "README.md"

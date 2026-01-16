@@ -76,14 +76,14 @@ class TestDocumentStore(DocumentStoreBaseTests):
         sorted_received = sorted(received, key=lambda d: d.id)
         sorted_expected = sorted(expected, key=lambda d: d.id)
 
-        assert len(sorted_received) == len(
-            sorted_expected
-        ), f"Different number of documents: received {len(sorted_received)}, expected {len(sorted_expected)}"
+        assert len(sorted_received) == len(sorted_expected), (
+            f"Different number of documents: received {len(sorted_received)}, expected {len(sorted_expected)}"
+        )
 
         for i, (r, e) in enumerate(zip(sorted_received, sorted_expected, strict=False)):
-            assert _documents_equal_with_tolerance(
-                r, e
-            ), f"Documents at index {i} are not equal:\n  received: {r}\n  expected: {e}"
+            assert _documents_equal_with_tolerance(r, e), (
+                f"Documents at index {i} are not equal:\n  received: {r}\n  expected: {e}"
+            )
 
     @override
     def test_write_documents(self, document_store: DocumentStore):
