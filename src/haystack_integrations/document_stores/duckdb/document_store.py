@@ -1,10 +1,13 @@
 # SPDX-FileCopyrightText: 2026-present Adrian Rumpold <a.rumpold@gmail.com>
 #
 # SPDX-License-Identifier: Apache-2.0
+import json
 import logging
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Protocol
 
+import pandas as pd
 from haystack import Document, default_from_dict, default_to_dict
 from haystack.document_stores.errors import DuplicateDocumentError, MissingDocumentError
 from haystack.document_stores.types import DuplicatePolicy
@@ -12,40 +15,60 @@ from typing_extensions import Any
 
 import duckdb
 from haystack_integrations.document_stores.duckdb.utils import (
+    build_filter_expression,
+    is_valid_identifier,
+    quote_identifier,
     to_duckdb_documents,
     to_haystack_documents,
-    validate_table_name,
 )
 
 logger = logging.getLogger(__name__)
 
 
-_CREATE_TABLE_QUERY = """
+_CREATE_TABLE_QUERY = """\
 CREATE TABLE {table} (
-id VARCHAR(128) PRIMARY KEY,
-embedding FLOAT[{embedding_dim}],
-content TEXT,
-blob_data BYTEA,
-blob_meta JSON,
-blob_mime_type VARCHAR(255),
-meta JSON)
+"id" VARCHAR(128) PRIMARY KEY,
+{embedding_field} FLOAT[{embedding_dim}],
+"content" TEXT,
+"blob_data" BYTEA,
+"blob_meta" JSON,
+"blob_mime_type" VARCHAR(255),
+"meta" JSON)
 """
 
-_CREATE_INDEX_QUERY = """
+_CREATE_INDEX_QUERY = """\
 CREATE INDEX {index}
 ON {table}
-USING HNSW(embedding)
+USING HNSW({embedding_field})
 """
 
-_UPDATE_QUERY = """
-ON CONFLICT (id) DO UPDATE SET
-embedding = EXCLUDED.embedding,
-content = EXCLUDED.content,
-blob_data = EXCLUDED.blob_data,
-blob_meta = EXCLUDED.blob_meta,
-blob_mime_type = EXCLUDED.blob_mime_type,
-meta = EXCLUDED.meta
+_INSERT_QUERY = """\
+INSERT INTO {table}
+("id", {embedding_field}, "content", "blob_data", "blob_meta", "blob_mime_type", "meta")
+VALUES ($id, $embedding, $content, $blob_data, $blob_meta, $blob_mime_type, $meta)
+{policy_action}
 """
+
+_UPDATE_QUERY_FRAGMENT = """
+ON CONFLICT ("id") DO UPDATE SET
+{embedding_field} = EXCLUDED.{embedding_field},
+"content" = EXCLUDED."content",
+"blob_data" = EXCLUDED."blob_data",
+"blob_meta" = EXCLUDED."blob_meta",
+"blob_mime_type" = EXCLUDED."blob_mime_type",
+"meta" = EXCLUDED."meta"
+"""
+
+
+class FilterCondition(Protocol):
+    field: str
+    operator: Literal["==", "!=", "<", "<=", ">", ">=", "in", "not in"]
+    value: Any
+
+
+class LogicExpression(Protocol):
+    operator: Literal["AND", "OR", "NOT"]
+    conditions: Sequence[FilterCondition]
 
 
 class DuckDBDocumentStore:
@@ -75,11 +98,11 @@ class DuckDBDocumentStore:
         """
         super().__init__()
 
-        if not validate_table_name(table):
+        if not is_valid_identifier(table):
             msg = f"invalid table nam: {table!r}"
             raise ValueError(msg)
 
-        if not validate_table_name(index):
+        if not is_valid_identifier(index):
             msg = f"invalid index name: {index!r}"
             raise ValueError(msg)
 
@@ -90,7 +113,9 @@ class DuckDBDocumentStore:
         self.recreate_index = recreate_index
         self.create_index_if_missing = create_index_if_missing
 
+        self.embedding_field = embedding_field
         self.embedding_dim = embedding_dim
+        self.write_batch_size = write_batch_size
 
         # NOTE: Need to explicitly enable persistent HNSW indices, still an experimental feature
         self._db = duckdb.connect(
@@ -100,6 +125,7 @@ class DuckDBDocumentStore:
             },
         )
         self._table_initialized = False
+        self._index_initialized = False
 
         self._db.install_extension("vss")
         self._db.load_extension("vss")
@@ -108,17 +134,28 @@ class DuckDBDocumentStore:
 
     def _delete_table(self):
         logger.debug(f"Dropping table {self.table!r}")
-        self._db.execute(f"DROP TABLE IF EXISTS {self.table}")
+        self._db.execute(f"DROP TABLE IF EXISTS {quote_identifier(self.table)}")
 
     def _delete_index(self):
         logger.debug(f"Dropping index {self.index!r}")
-        self._db.execute(f"DROP INDEX IF EXISTS {self.index}")
+        self._db.execute(f"DROP INDEX IF EXISTS {quote_identifier(self.index)}")
 
     def _create_index(self):
-        if self.recreate_index:
-            self._delete_index()
         logger.debug(f"Creating index {self.index!r}")
-        self._db.execute(_CREATE_INDEX_QUERY.format(index=self.index, table=self.table))
+        self._db.execute(
+            _CREATE_INDEX_QUERY.format(
+                index=quote_identifier(self.index),
+                table=quote_identifier(self.table),
+                embedding_field=quote_identifier(self.embedding_field),
+            )
+        )
+
+    def _index_exists(self) -> bool:
+        result = self._db.execute(
+            "SELECT COUNT(*) FROM duckdb_indexes() WHERE index_name = ?",
+            [self.index],
+        ).fetchone()
+        return bool(result and result[0])
 
     def _create_table(self):
         try:
@@ -128,7 +165,8 @@ class DuckDBDocumentStore:
             logger.debug(f"Creating table {self.table!r}")
             self._db.execute(
                 _CREATE_TABLE_QUERY.format(
-                    table=self.table,
+                    table=quote_identifier(self.table),
+                    embedding_field=quote_identifier(self.embedding_field),
                     embedding_dim=self.embedding_dim,
                 ),
             )
@@ -140,12 +178,23 @@ class DuckDBDocumentStore:
         if not self._table_initialized:
             self._create_table()
 
-        index_exists = False
-        if not index_exists:
+        if not self._index_initialized:
+            if self.recreate_index:
+                self._delete_index()
+                self._create_index()
+                self._index_initialized = True
+                return
+
+            if self._index_exists():
+                self._index_initialized = True
+                return
+
             if not self.create_index_if_missing:
                 msg = f"index is missing, but create_index_if_missing=False: {self.index!r}"
                 raise RuntimeError(msg)
+
             self._create_index()
+            self._index_initialized = True
 
     def count_documents(self) -> int:
         """
@@ -153,7 +202,10 @@ class DuckDBDocumentStore:
         """
         self._ensure_db_setup()
 
-        return int(self._db.table(self.table).count("*").fetchone()[0])
+        result = self._db.table(self.table).count("*").fetchone()
+        if not result:
+            raise RuntimeError
+        return int(result[0])
 
     def filter_documents(self, filters: dict[str, Any] | None = None) -> list[Document]:
         """
@@ -222,12 +274,32 @@ class DuckDBDocumentStore:
         :return: a list of Documents that match the given filters.
         """
         self._ensure_db_setup()
-        _ = filters
 
-        # TODO: Apply filters
         columns = ["id", "embedding", "content", "blob_data", "blob_meta", "blob_mime_type", "meta"]
-        records = self._db.execute(f"SELECT {", ".join(columns)} FROM {self.table}").fetchmany()
-        docs = [{col: val for rec in records for col, val in zip(columns, rec, strict=True)}]
+        select_columns = [
+            "id",
+            self.embedding_field,
+            "content",
+            "blob_data",
+            "blob_meta",
+            "blob_mime_type",
+            "meta",
+        ]
+
+        base_relation = self._db.table(self.table).set_alias("docs")
+        relation = base_relation
+
+        # Apply filters if provided. Use a filtered-id join to avoid DuckDB dropping array columns.
+        if filters is not None:
+            filter_expr = build_filter_expression(filters)
+            if filter_expr is not None:
+                filtered_ids = base_relation.filter(filter_expr).project("id").set_alias("filtered_ids")
+                relation = base_relation.join(filtered_ids, "id")
+
+        relation = relation.select(*[f"docs.{col}" for col in select_columns])
+
+        records = relation.fetchall()
+        docs = [dict(zip(columns, rec, strict=True)) for rec in records]
         return to_haystack_documents(docs)
 
     def write_documents(self, documents: list[Document], policy: DuplicatePolicy = DuplicatePolicy.NONE) -> int:
@@ -243,8 +315,8 @@ class DuckDBDocumentStore:
         :raises DuplicateDocumentError: Exception trigger on duplicate document if `policy=DuplicatePolicy.FAIL`
         :return: number of documents written to the store
         """
-        num_written = 0
 
+        # Defensive type checks for input arguments
         if not isinstance(documents, list):
             msg = f"documents is not a list: {documents!r}"
             raise ValueError(msg)
@@ -258,16 +330,55 @@ class DuckDBDocumentStore:
         if policy in (DuplicatePolicy.SKIP, DuplicatePolicy.NONE):
             policy_action = "ON CONFLICT DO NOTHING"
         elif policy == DuplicatePolicy.OVERWRITE:
-            policy_action = _UPDATE_QUERY
+            policy_action = _UPDATE_QUERY_FRAGMENT.format(embedding_field=quote_identifier(self.embedding_field))
 
+        insert_columns = [
+            "id",
+            self.embedding_field,
+            "content",
+            "blob_data",
+            "blob_meta",
+            "blob_mime_type",
+            "meta",
+        ]
+        source_columns = [
+            "id",
+            "embedding",
+            "content",
+            "blob_data",
+            "blob_meta",
+            "blob_mime_type",
+            "meta",
+        ]
+        insert_cols_sql = ", ".join(quote_identifier(col) for col in insert_columns)
+        source_cols_sql = ", ".join(quote_identifier(col) for col in source_columns)
+        policy_clause = f" {policy_action}" if policy_action else ""
+        batch_size = max(1, self.write_batch_size)
+        view_name = "_haystack_docs_batch"
+        view_name_sql = quote_identifier(view_name)
+
+        num_written = 0
         self._db.begin()
         try:
-            for doc in to_duckdb_documents(documents):
-                num_rows = self._db.execute(
-                    f"INSERT INTO {self.table} (id, embedding, content, blob_data, blob_meta, blob_mime_type, meta) VALUES ($id, $embedding, $content, $blob_data, $blob_meta, $blob_mime_type, $meta) {policy_action}",
-                    parameters=doc,
-                ).fetchone()[0]
-                num_written += num_rows
+            db_documents = to_duckdb_documents(documents)
+            for doc in db_documents:
+                if doc.get("meta") is not None and not isinstance(doc["meta"], str):
+                    doc["meta"] = json.dumps(doc["meta"])
+                if doc.get("blob_meta") is not None and not isinstance(doc["blob_meta"], str):
+                    doc["blob_meta"] = json.dumps(doc["blob_meta"])
+
+            for start in range(0, len(db_documents), batch_size):
+                batch = db_documents[start : start + batch_size]
+                df = pd.DataFrame.from_records(batch, columns=source_columns)
+                self._db.register(view_name, df)
+                try:
+                    result = self._db.execute(
+                        f"INSERT INTO {quote_identifier(self.table)} ({insert_cols_sql}) "
+                        f"SELECT {source_cols_sql} FROM {view_name_sql}{policy_clause} RETURNING 1"
+                    ).fetchall()
+                finally:
+                    self._db.unregister(view_name)
+                num_written += len(result)
             self._db.commit()
         except duckdb.ConstraintException as ce:
             self._db.rollback()
@@ -287,7 +398,8 @@ class DuckDBDocumentStore:
         # FIXME: check for existence
         self._db.fetchone()
 
-        self._db.execute(f"DELETE FROM {self.table} WHERE id in ?", [document_ids])
+        query = f'DELETE FROM {quote_identifier(self.table)} WHERE "id" IN ?'
+        self._db.execute(query, [document_ids])
 
     def to_dict(self) -> dict[str, Any]:
         """

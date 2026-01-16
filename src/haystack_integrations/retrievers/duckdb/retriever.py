@@ -35,4 +35,4 @@ class DuckDBRetriever:
         :param data: The input data for the retriever. In this case, a list of queries.
         :return: The retrieved documents.
         """
-        return []  # FIXME
+        return {}  # FIXME
