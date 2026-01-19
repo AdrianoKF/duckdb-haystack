@@ -188,6 +188,9 @@ class TestEmbeddingRetrieval:
         assert len(results) == 2
         assert results[0].content == "Most similar"
         assert results[1].content == "Second best"
+        assert results[0].score is not None
+        assert results[1].score is not None
+        assert results[0].score >= results[1].score
 
     def test_embedding_retrieval_l2_distance_score_order(self):
         """Test that L2 distance scores are ordered correctly (lower is better)."""

@@ -77,6 +77,17 @@ def _metric_to_distance_sql_function(metric: SimilarityMetric) -> str:
             raise ValueError(msg)
 
 
+def _metric_to_score_sql_expression(metric: SimilarityMetric, distance_expression: str) -> str:
+    match metric:
+        case "cosine":
+            return f"(1 - {distance_expression})"
+        case "l2sq" | "ip":
+            return f"(-{distance_expression})"
+        case _:
+            msg = f"invalid similarity metric: {metric!r}"
+            raise ValueError(msg)
+
+
 class FilterCondition(Protocol):
     field: str
     operator: Literal["==", "!=", "<", "<=", ">", ">=", "in", "not in"]
@@ -524,7 +535,7 @@ class DuckDBDocumentStore:
         self._ensure_db_setup()
 
         # Column names for result dict (standardized to "embedding")
-        columns = ["id", "embedding", "content", "blob_data", "blob_meta", "blob_mime_type", "meta"]
+        columns = ["id", "embedding", "content", "blob_data", "blob_meta", "blob_mime_type", "meta", "score"]
         # DB columns to select (may use custom embedding_field)
         select_columns = [
             "id",
@@ -540,7 +551,11 @@ class DuckDBDocumentStore:
         distance_fn = _metric_to_distance_sql_function(similarity_metric)
         embedding_field_quoted = quote_identifier(self.embedding_field)
         table_quoted = quote_identifier(self.table)
-        select_sql = ", ".join(quote_identifier(col) for col in select_columns)
+        distance_expr = f"{distance_fn}({embedding_field_quoted}, $query_embedding::FLOAT[{self.embedding_dim}])"
+        score_expr = _metric_to_score_sql_expression(similarity_metric, distance_expr)
+        select_sql_parts = [quote_identifier(col) for col in select_columns]
+        select_sql_parts.append(f"{score_expr} AS score")
+        select_sql = ", ".join(select_sql_parts)
 
         # Apply filters if provided using filtered-id subquery
         where_clause = ""
@@ -562,7 +577,7 @@ class DuckDBDocumentStore:
 SELECT {select_sql}
 FROM {table_quoted}
 {where_clause}
-ORDER BY {distance_fn}({embedding_field_quoted}, $query_embedding::FLOAT[{self.embedding_dim}]) ASC
+ORDER BY {distance_expr} ASC
 LIMIT {top_k}
 """
         result = self._execute_query(query, params, operation="embedding retrieval")

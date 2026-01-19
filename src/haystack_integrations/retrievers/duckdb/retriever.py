@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2026-present Adrian Rumpold <a.rumpold@gmail.com>
 #
 # SPDX-License-Identifier: Apache-2.0
-from collections.abc import Sequence
 
 from haystack import Document, component, default_from_dict, default_to_dict
 from haystack.document_stores.types import FilterPolicy
@@ -45,7 +44,7 @@ class DuckDBRetriever:
     @component.output_types(documents=list[Document])
     def run(
         self,
-        query_embedding: Sequence[float],
+        query_embedding: list[float],
         filters: dict[str, Any] | None = None,
         top_k: int | None = None,
         similarity_metric: SimilarityMetric | None = None,
