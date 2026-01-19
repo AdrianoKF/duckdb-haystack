@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
@@ -37,7 +37,10 @@ Source = "https://github.com/AdrianoKF/duckdb-haystack"
 packages = ["src/haystack_integrations"]
 
 [tool.hatch.version]
-path = "src/haystack_integrations/document_stores/duckdb/__about__.py"
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/haystack_integrations/document_stores/duckdb/_version.py"
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -109,7 +112,7 @@ ban-relative-imports = "parents"
 source_pkgs = ["haystack_integrations", "tests"]
 branch = true
 parallel = true
-omit = ["src/haystack_integrations/document_stores/duckdb/__about__.py"]
+omit = ["src/haystack_integrations/document_stores/duckdb/_version.py"]
 
 [tool.coverage.paths]
 haystack_integrations = [
