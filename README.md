@@ -1,4 +1,6 @@
-[![test](https://github.com/AdrianoKF/duckdb-haystack/actions/workflows/test.yml/badge.svg)](https://github.com/AdrianoKF/duckdb-haystack/actions/workflows/test.yml)
+[![PyPI - Version](https://img.shields.io/pypi/v/duckdb-haystack)](https://pypi.org/project/duckdb-haystack/)
+[![GitHub License](https://img.shields.io/github/license/AdrianoKF/duckdb-haystack)](https://github.com/AdrianoKF/duckdb-haystack/blob/main/LICENSE)
+[![CI Test Status](https://github.com/AdrianoKF/duckdb-haystack/actions/workflows/test.yml/badge.svg)](https://github.com/AdrianoKF/duckdb-haystack/actions/workflows/test.yml)
 
 # DuckDB Document Store for Haystack
 
