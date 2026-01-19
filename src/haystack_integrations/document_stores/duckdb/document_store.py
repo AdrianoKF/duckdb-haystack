@@ -5,7 +5,7 @@ import json
 import logging
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import Literal, Protocol, TypeAlias
 
 import pandas as pd
 from haystack import Document, default_from_dict, default_to_dict
@@ -40,6 +40,7 @@ _CREATE_INDEX_QUERY = """\
 CREATE INDEX {index}
 ON {table}
 USING HNSW({embedding_field})
+WITH (metric = '{metric}')
 """
 
 _INSERT_QUERY = """\
@@ -49,7 +50,7 @@ VALUES ($id, $embedding, $content, $blob_data, $blob_meta, $blob_mime_type, $met
 {policy_action}
 """
 
-_UPDATE_QUERY_FRAGMENT = """
+_UPDATE_QUERY_FRAGMENT = """\
 ON CONFLICT ("id") DO UPDATE SET
 {embedding_field} = EXCLUDED.{embedding_field},
 "content" = EXCLUDED."content",
@@ -58,6 +59,22 @@ ON CONFLICT ("id") DO UPDATE SET
 "blob_mime_type" = EXCLUDED."blob_mime_type",
 "meta" = EXCLUDED."meta"
 """
+
+
+SimilarityMetric: TypeAlias = Literal["l2sq", "cosine", "ip"]
+
+
+def _metric_to_distance_sql_function(metric: SimilarityMetric) -> str:
+    match metric:
+        case "l2sq":
+            return "array_distance"
+        case "cosine":
+            return "array_cosine_distance"
+        case "ip":
+            return "array_negative_inner_product"
+        case _:
+            msg = f"invalid similarity metric: {metric!r}"
+            raise ValueError(msg)
 
 
 class FilterCondition(Protocol):
@@ -84,7 +101,7 @@ class DuckDBDocumentStore:
         index: str = "hnsw_idx_haystack_documents",
         embedding_dim: int = 768,
         embedding_field: str = "embedding",
-        similarity_metric: Literal["l2sq", "cosine", "ip"] = "cosine",
+        similarity_metric: SimilarityMetric = "cosine",
         # progress_bar: bool = False,
         write_batch_size: int = 100,
         create_index_if_missing: bool = True,
@@ -115,6 +132,8 @@ class DuckDBDocumentStore:
 
         self.embedding_field = embedding_field
         self.embedding_dim = embedding_dim
+        self.similarity_metric: SimilarityMetric = similarity_metric  # NOTE: why does this need an explicit type hint?
+
         self.write_batch_size = write_batch_size
 
         # NOTE: Need to explicitly enable persistent HNSW indices, still an experimental feature
@@ -147,6 +166,7 @@ class DuckDBDocumentStore:
                 index=quote_identifier(self.index),
                 table=quote_identifier(self.table),
                 embedding_field=quote_identifier(self.embedding_field),
+                metric=self.similarity_metric,
             )
         )
 
@@ -157,10 +177,22 @@ class DuckDBDocumentStore:
         ).fetchone()
         return bool(result and result[0])
 
+    def _table_exists(self) -> bool:
+        result = self._db.execute(
+            "SELECT COUNT(*) FROM duckdb_tables() WHERE table_name = ?",
+            [self.table],
+        ).fetchone()
+        return bool(result and result[0])
+
     def _create_table(self):
         try:
             if self.recreate_table:
                 self._delete_table()
+
+            if self._table_exists():
+                logger.debug(f"Table {self.table!r} already exists")
+                self._table_initialized = True
+                return
 
             logger.debug(f"Creating table {self.table!r}")
             self._db.execute(
@@ -421,3 +453,61 @@ class DuckDBDocumentStore:
         you can changed it back here.
         """
         return default_from_dict(cls, data)
+
+    def embedding_retrieval(
+        self,
+        query_embedding: Sequence[float],
+        *,
+        filters: dict[str, Any] | None = None,
+        similarity_metric: SimilarityMetric | None = None,
+        top_k: int = 10,
+    ) -> list[Document]:
+        self._ensure_db_setup()
+
+        # Column names for result dict (standardized to "embedding")
+        columns = ["id", "embedding", "content", "blob_data", "blob_meta", "blob_mime_type", "meta"]
+        # DB columns to select (may use custom embedding_field)
+        select_columns = [
+            "id",
+            self.embedding_field,
+            "content",
+            "blob_data",
+            "blob_meta",
+            "blob_mime_type",
+            "meta",
+        ]
+
+        similarity_metric = similarity_metric or self.similarity_metric
+        distance_fn = _metric_to_distance_sql_function(similarity_metric)
+        embedding_field_quoted = quote_identifier(self.embedding_field)
+        table_quoted = quote_identifier(self.table)
+        select_sql = ", ".join(quote_identifier(col) for col in select_columns)
+
+        # Apply filters if provided using filtered-id subquery
+        where_clause = ""
+        params = {"query_embedding": query_embedding}
+
+        if filters is not None:
+            filter_expr = build_filter_expression(filters)
+            if filter_expr is not None:
+                # Use DuckDB relational API to build filtered IDs subquery
+                base_relation = self._db.table(self.table)
+                filtered_ids_relation = base_relation.filter(filter_expr).project("id")
+                filtered_ids_sql = filtered_ids_relation.sql_query()
+
+                # Add WHERE clause to restrict to filtered IDs
+                where_clause = f' WHERE "id" IN ({filtered_ids_sql})'
+
+        # Build and execute the final query with distance ordering
+        query = f"""
+SELECT {select_sql}
+FROM {table_quoted}
+{where_clause}
+ORDER BY {distance_fn}({embedding_field_quoted}, $query_embedding::FLOAT[{self.embedding_dim}]) ASC
+LIMIT {top_k}
+"""
+
+        result = self._db.execute(query=query, parameters=params)
+        records = result.fetchall()
+        docs = [dict(zip(columns, rec, strict=True)) for rec in records]
+        return to_haystack_documents(docs)

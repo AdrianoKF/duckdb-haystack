@@ -5,6 +5,7 @@ import math
 
 import pytest
 from haystack import Document
+from haystack.dataclasses.byte_stream import ByteStream
 from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 from haystack.testing.document_store import DocumentStoreBaseTests
 from typing_extensions import override
@@ -55,10 +56,6 @@ class TestDocumentStore(DocumentStoreBaseTests):
     @override
     @pytest.fixture
     def document_store(self) -> DuckDBDocumentStore:
-        """
-        This is the most basic requirement for the child class: provide
-        an instance of this document store so the base class can use it.
-        """
         return DuckDBDocumentStore(table="documents", recreate_index=True, recreate_table=True)
 
     @override
