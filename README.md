@@ -2,6 +2,10 @@
 
 # DuckDB Document Store for Haystack
 
+> [!NOTE]
+> This project is a proof of concept - use at your own risk.
+> The code may be susceptible to bugs and security issues (such as SQL injection), proceed with caution.
+
 A DuckDB-backed document store for [Haystack](https://github.com/deepset-ai/haystack/) with
 HNSW vector search via DuckDB's [VSS](https://duckdb.org/docs/stable/core_extensions/vss) extension. It supports:
 
