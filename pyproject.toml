@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "duckdb-haystack"
 dynamic = ["version"]
-description = ''
+description = "Haystack document store and retriever for DuckDB VSS"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
