@@ -106,14 +106,17 @@ ban-relative-imports = "parents"
 "tests/**/*" = ["PLR2004", "S101", "TID252"]
 
 [tool.coverage.run]
-source_pkgs = ["duckdb_store", "tests"]
+source_pkgs = ["haystack_integrations", "tests"]
 branch = true
 parallel = true
-omit = ["src/duckdb_store/__about__.py"]
+omit = ["src/haystack_integrations/document_stores/duckdb/__about__.py"]
 
 [tool.coverage.paths]
-duckdb_store = ["src/duckdb_store", "*/duckdb-store/src/duckdb"]
-tests = ["tests", "*/duckdb-store/tests"]
+haystack_integrations = [
+  "src/haystack_integrations",
+  "*/duckdb-haystack/src/haystack_integrations",
+]
+tests = ["tests", "*/duckdb-haystack/tests"]
 
 [tool.coverage.report]
 exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
