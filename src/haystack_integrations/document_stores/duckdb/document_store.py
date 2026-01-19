@@ -116,7 +116,7 @@ class DuckDBDocumentStore:
         super().__init__()
 
         if not is_valid_identifier(table):
-            msg = f"invalid table nam: {table!r}"
+            msg = f"invalid table name: {table!r}"
             raise ValueError(msg)
 
         if not is_valid_identifier(index):
@@ -377,6 +377,7 @@ class DuckDBDocumentStore:
         relation = base_relation
 
         # Apply filters if provided. Use a filtered-id join to avoid DuckDB dropping array columns.
+        # See issue: https://github.com/duckdb/duckdb/issues/20579
         if filters is not None:
             filter_expr = build_filter_expression(filters)
             if filter_expr is not None:
