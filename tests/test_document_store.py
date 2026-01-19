@@ -5,7 +5,6 @@ import math
 
 import pytest
 from haystack import Document
-from haystack.dataclasses.byte_stream import ByteStream
 from haystack.document_stores.types import DocumentStore, DuplicatePolicy
 from haystack.testing.document_store import DocumentStoreBaseTests
 from typing_extensions import override

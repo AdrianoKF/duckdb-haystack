@@ -7,7 +7,6 @@ import pytest
 from haystack import Document
 from haystack.dataclasses import ByteStream
 from haystack.document_stores.types import DuplicatePolicy
-from numpy.random import rand
 
 from haystack_integrations.document_stores.duckdb import DuckDBDocumentStore
 

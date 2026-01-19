@@ -81,6 +81,8 @@ lint.ignore = [
   "S105",
   "S106",
   "S107",
+  # Ignore SQL injection vector warning (we need to inject table names, ..., into the query)
+  "S608",
   # Ignore complexity
   "C901",
   "PLR0911",

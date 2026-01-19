@@ -170,8 +170,13 @@ class DuckDBDocumentStore:
         """
         try:
             # Log query (truncate if too long)
-            query_preview = query[:200].replace("\n", " ") if len(query) > 200 else query.replace("\n", " ")
-            logger.debug(f"Executing {operation}: {query_preview}{'...' if len(query) > 200 else ''}")
+            max_preview_length = 200
+            query_preview = (
+                query[:max_preview_length].replace("\n", " ")
+                if len(query) > max_preview_length
+                else query.replace("\n", " ")
+            )
+            logger.debug(f"Executing {operation}: {query_preview}{'...' if len(query) > max_preview_length else ''}")
 
             # Run EXPLAIN if requested
             if explain:

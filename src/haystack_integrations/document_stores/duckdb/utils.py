@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from functools import reduce
 
 from haystack.dataclasses import ByteStream, Document
@@ -42,7 +43,6 @@ def quote_identifier(name: str) -> str:
 
 def _is_iso8601_datetime(s: str) -> bool:
     """Check if a string looks like an ISO 8601 datetime."""
-    import re
 
     # Basic ISO 8601 datetime pattern: YYYY-MM-DDTHH:MM:SS with optional timezone
     iso_pattern = r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?)?$"
