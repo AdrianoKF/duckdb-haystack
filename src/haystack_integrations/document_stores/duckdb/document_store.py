@@ -9,7 +9,7 @@ from typing import Literal, Protocol, TypeAlias
 
 import pandas as pd
 from haystack import Document, default_from_dict, default_to_dict
-from haystack.document_stores.errors import DuplicateDocumentError, MissingDocumentError
+from haystack.document_stores.errors import DuplicateDocumentError
 from haystack.document_stores.types import DuplicatePolicy
 from typing_extensions import Any
 
@@ -151,36 +151,85 @@ class DuckDBDocumentStore:
 
         self._ensure_db_setup()
 
+    def _execute_query(
+        self,
+        query: str,
+        params: dict | list | None = None,
+        *,
+        operation: str = "query",
+        explain: bool = False,
+    ) -> duckdb.DuckDBPyConnection:
+        """
+        Execute a SQL query with logging and error handling.
+
+        :param query: The SQL query to execute.
+        :param params: Query parameters (dict for named parameters, list for positional).
+        :param operation: Description of the operation for logging purposes.
+        :param explain: If True, run EXPLAIN on the query first and log the result.
+        :return: DuckDB result object.
+        """
+        try:
+            # Log query (truncate if too long)
+            query_preview = query[:200].replace("\n", " ") if len(query) > 200 else query.replace("\n", " ")
+            logger.debug(f"Executing {operation}: {query_preview}{'...' if len(query) > 200 else ''}")
+
+            # Run EXPLAIN if requested
+            if explain:
+                # Use EXPLAIN ANALYZE for detailed execution plan with actual timings
+                explain_query = f"EXPLAIN ANALYZE {query}"
+                explain_result = self._db.execute(explain_query, params)
+                # Get the plan as a DataFrame and extract the explain_value column
+                explain_df = explain_result.df()
+                if not explain_df.empty and "explain_value" in explain_df.columns:
+                    plan_text = explain_df["explain_value"].iloc[0]
+                    logger.debug(f"Query plan for {operation}:")
+                    for line in str(plan_text).split("\n"):
+                        logger.debug(f"  {line}")
+
+            return self._db.execute(query, params)
+        except duckdb.Error as e:
+            logger.error(f"Database error during {operation}: {e}", exc_info=True)
+            raise
+
     def _delete_table(self):
         logger.debug(f"Dropping table {self.table!r}")
-        self._db.execute(f"DROP TABLE IF EXISTS {quote_identifier(self.table)}")
+        self._execute_query(
+            f"DROP TABLE IF EXISTS {quote_identifier(self.table)}",
+            operation="drop table",
+        )
 
     def _delete_index(self):
         logger.debug(f"Dropping index {self.index!r}")
-        self._db.execute(f"DROP INDEX IF EXISTS {quote_identifier(self.index)}")
+        self._execute_query(
+            f"DROP INDEX IF EXISTS {quote_identifier(self.index)}",
+            operation="drop index",
+        )
 
     def _create_index(self):
         logger.debug(f"Creating index {self.index!r}")
-        self._db.execute(
+        self._execute_query(
             _CREATE_INDEX_QUERY.format(
                 index=quote_identifier(self.index),
                 table=quote_identifier(self.table),
                 embedding_field=quote_identifier(self.embedding_field),
                 metric=self.similarity_metric,
-            )
+            ),
+            operation="create index",
         )
 
     def _index_exists(self) -> bool:
-        result = self._db.execute(
+        result = self._execute_query(
             "SELECT COUNT(*) FROM duckdb_indexes() WHERE index_name = ?",
             [self.index],
+            operation="check index exists",
         ).fetchone()
         return bool(result and result[0])
 
     def _table_exists(self) -> bool:
-        result = self._db.execute(
+        result = self._execute_query(
             "SELECT COUNT(*) FROM duckdb_tables() WHERE table_name = ?",
             [self.table],
+            operation="check table exists",
         ).fetchone()
         return bool(result and result[0])
 
@@ -195,12 +244,13 @@ class DuckDBDocumentStore:
                 return
 
             logger.debug(f"Creating table {self.table!r}")
-            self._db.execute(
+            self._execute_query(
                 _CREATE_TABLE_QUERY.format(
                     table=quote_identifier(self.table),
                     embedding_field=quote_identifier(self.embedding_field),
                     embedding_dim=self.embedding_dim,
                 ),
+                operation="create table",
             )
             self._table_initialized = True
         except duckdb.DatabaseError:
@@ -330,7 +380,9 @@ class DuckDBDocumentStore:
 
         relation = relation.select(*[f"docs.{col}" for col in select_columns])
 
-        records = relation.fetchall()
+        # Convert to SQL and execute
+        query = relation.sql_query()
+        records = self._execute_query(query, operation="filter documents").fetchall()
         docs = [dict(zip(columns, rec, strict=True)) for rec in records]
         return to_haystack_documents(docs)
 
@@ -404,9 +456,10 @@ class DuckDBDocumentStore:
                 df = pd.DataFrame.from_records(batch, columns=source_columns)
                 self._db.register(view_name, df)
                 try:
-                    result = self._db.execute(
+                    result = self._execute_query(
                         f"INSERT INTO {quote_identifier(self.table)} ({insert_cols_sql}) "
-                        f"SELECT {source_cols_sql} FROM {view_name_sql}{policy_clause} RETURNING 1"
+                        f"SELECT {source_cols_sql} FROM {view_name_sql}{policy_clause} RETURNING 1",
+                        operation="insert documents batch",
                     ).fetchall()
                 finally:
                     self._db.unregister(view_name)
@@ -431,7 +484,7 @@ class DuckDBDocumentStore:
         self._db.fetchone()
 
         query = f'DELETE FROM {quote_identifier(self.table)} WHERE "id" IN ?'
-        self._db.execute(query, [document_ids])
+        self._execute_query(query, [document_ids], operation="delete documents")
 
     def to_dict(self) -> dict[str, Any]:
         """
@@ -506,8 +559,7 @@ FROM {table_quoted}
 ORDER BY {distance_fn}({embedding_field_quoted}, $query_embedding::FLOAT[{self.embedding_dim}]) ASC
 LIMIT {top_k}
 """
-
-        result = self._db.execute(query=query, parameters=params)
+        result = self._execute_query(query, params, operation="embedding retrieval")
         records = result.fetchall()
         docs = [dict(zip(columns, rec, strict=True)) for rec in records]
         return to_haystack_documents(docs)

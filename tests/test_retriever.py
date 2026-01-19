@@ -67,7 +67,7 @@ class TestDuckDBRetriever:
             filter_policy=FilterPolicy.MERGE,
         )
         res = retriever.to_dict()
-        
+
         expected_type = "haystack_integrations.retrievers.duckdb.retriever.DuckDBRetriever"
         assert res["type"] == expected_type
         assert res["init_parameters"]["filters"] == {"field": "value"}
@@ -101,7 +101,7 @@ class TestDuckDBRetriever:
         }
 
         retriever = DuckDBRetriever.from_dict(data)
-        
+
         assert isinstance(retriever, DuckDBRetriever)
         assert isinstance(retriever.document_store, DuckDBDocumentStore)
         assert retriever.document_store.table == "test_table"
@@ -132,7 +132,7 @@ class TestDuckDBRetriever:
         }
 
         retriever = DuckDBRetriever.from_dict(data)
-        
+
         assert retriever.filter_policy == FilterPolicy.REPLACE
         assert retriever.filters == {"field": "value"}
         assert retriever.top_k == 5
