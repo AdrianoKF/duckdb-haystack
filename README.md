@@ -1,79 +1,89 @@
-[![test](https://github.com/deepset-ai/document-store/actions/workflows/test.yml/badge.svg)](https://github.com/deepset-ai/document-store/actions/workflows/test.yml)
+[![test](https://github.com/AdrianoKF/duckdb-haystack/actions/workflows/test.yml/badge.svg)](https://github.com/AdrianoKF/duckdb-haystack/actions/workflows/test.yml)
 
-# DuckDB Store
+# DuckDB Document Store for Haystack
 
-This Github repository is a template that can be used to create custom document stores to extend
-the new [Haystack](https://github.com/deepset-ai/haystack/) API available from version 2.0.
+A DuckDB-backed document store for [Haystack](https://github.com/deepset-ai/haystack/) with
+HNSW vector search via DuckDB's [VSS](https://duckdb.org/docs/stable/core_extensions/vss) extension. It supports:
 
-## Template features
+- Dense embedding storage with HNSW indexing (cosine similarity, Euclidean distance, or inner product distance)
+- Filtering with Haystack-style filter dictionaries
+- In-memory operation or persistence via a DuckDB database file on disk
 
-By creating a new repo using this template, you'll get the following advantages:
+## Installation (GitHub)
 
-- Ready-made code layout and scaffold to build a custom document store.
-- Support for packaging and distributing the code through Python wheels using Hatch.
-- Github workflow to build and upload a package when tagging the repo.
-- Github workflow to run the tests on Pull Requests.
-
-## How to use this repo
-
-1. Create a new repository starting from this template. If you never used this feature before, you
-   can find more details in [Github docs](https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template).
-2. If possible, follow the convention `technology-haystack` for the name of the new repository,
-   where `technology` can be for example the name of a vector database you're integrating.
-3. Rename the package `src/example_store` to something more meaningful and adjust the Python
-   import statements.
-4. Replace any occurrence of `example_store` and `example-store` across the repo, according
-   to the name you chose in the previous steps.
-5. Search the whole codebase for the string `#FIXME`, that's where you're supposed to change or add
-   code specific for the database you're integrating.
-6. If Apache 2.0 is not suitable for your needs, change the software license.
-
-When your custom document store is ready and working, feel free to add it to the list of available
-[Haystack Integrations](https://haystack.deepset.ai/integrations) by opening a Pull Request in
-[this repo](https://github.com/deepset-ai/haystack-integrations).
-
-## Test
-
-You can use `hatch` to run the linters:
+Use `uv` to install directly from the repository:
 
 ```console
-~$ hatch run lint:all
-cmd [1] | ruff .
-cmd [2] | black --check --diff .
-All done! ✨ 🍰 ✨
-6 files would be left unchanged.
-cmd [3] | mypy --install-types --non-interactive src/example_store tests
-Success: no issues found in 6 source files
+uv pip install "duckdb-haystack @ git+https://github.com/AdrianoKF/duckdb-haystack.git"
 ```
 
-Similar for running the tests:
+## Usage
 
-```console
-~$ hatch run cov
-cmd [1] | coverage run -m pytest tests
-...
+### 1) DocumentStore CRUD example
+
+```python
+from haystack import Document
+
+from haystack_integrations.document_stores.duckdb import DuckDBDocumentStore, document_store
+
+store = DuckDBDocumentStore(
+    database=":memory:",
+    embedding_dim=3,
+    similarity_metric="cosine",
+)
+
+store.write_documents(
+    [
+        Document(id="doc-1", content="DuckDB is fast.", embedding=[0.1, 0.0, 0.9], meta={"source": "notes"}),
+        Document(id="doc-2", content="Haystack pipelines are modular.", embedding=[0.2, 0.1, 0.8]),
+    ]
+)
+
+print("Total document count:", store.count_documents())
+
+filters = {"field": "meta.source", "operator": "==", "value": "notes"}
+filtered = store.filter_documents(filters=filters)
+print("Filtered documents:", [doc.id for doc in filtered])
+
+store.delete_documents(document_ids=["doc-2"])
+print("After deletion:", store.filter_documents())
 ```
 
-## Build
+### 2) Retrieval with DuckDBRetriever in a pipeline
 
-To build the package you can use `hatch`:
+```python
+from haystack import Document, Pipeline
+from haystack.components.embedders import SentenceTransformersDocumentEmbedder, SentenceTransformersTextEmbedder
 
-```console
-~$ hatch build
-[sdist]
-dist/example_store-0.0.1.tar.gz
+from haystack_integrations.document_stores.duckdb import DuckDBDocumentStore
+from haystack_integrations.retrievers.duckdb import DuckDBRetriever
 
-[wheel]
-dist/example_store-0.0.1-py3-none-any.whl
+store = DuckDBDocumentStore(database=":memory:", embedding_dim=384)
+
+doc_embedder = SentenceTransformersDocumentEmbedder(model="sentence-transformers/all-MiniLM-L6-v2")
+doc_embedder.warm_up()
+documents = [
+    Document(content="DuckDB stores vectors in Float arrays backed by an HNSW index."),
+    Document(content="DuckDB is an analytical in-process SQL database management system."),
+    Document(content="Haystack offers composable pipelines."),
+]
+documents = doc_embedder.run(documents=documents)["documents"]
+store.write_documents(documents)
+
+query_embedder = SentenceTransformersTextEmbedder(model="sentence-transformers/all-MiniLM-L6-v2")
+retriever = DuckDBRetriever(document_store=store)
+
+pipeline = Pipeline()
+pipeline.add_component("query_embedder", query_embedder)
+pipeline.add_component("retriever", retriever)
+pipeline.connect("query_embedder.embedding", "retriever.query_embedding")
+
+result = pipeline.run(data={"query_embedder": {"text": "How does DuckDB store vectors?"}})
+
+print(result["retriever"]["documents"][0].content)
 ```
-
-## Release
-
-To automatically build and push the package to PyPI, you need to set a repository secret called `PYPI_API_TOKEN`
-containing a valid token for your PyPI account.
-Then set the desired version number in `src/example_store/__about__.py` and tag the commit using the format
-`vX.Y.Z`. After pushing the tag, a Github workflow will start and take care of building and releasing the package.
 
 ## License
 
-`example-store` is distributed under the terms of the [Apache-2.0](https://spdx.org/licenses/Apache-2.0.html) license.
+`duckdb-haystack` is distributed under the terms of the [Apache-2.0](https://spdx.org/licenses/Apache-2.0.html)
+license.
