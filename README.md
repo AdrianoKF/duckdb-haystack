@@ -15,9 +15,17 @@ HNSW vector search via DuckDB's [VSS](https://duckdb.org/docs/stable/core_extens
 - Filtering with Haystack-style filter dictionaries
 - In-memory operation or persistence via a DuckDB database file on disk
 
-## Installation (GitHub)
+## Installation
 
-Use `uv` to install directly from the repository:
+You can install `duckdb-haystack` directly from PyPI:
+
+```console
+$ pip install duckdb-haystack
+# or
+$ uv pip install duckdb-haystack
+```
+
+Alternatively, you can install the latest development version from the repository:
 
 ```console
 uv pip install "duckdb-haystack @ git+https://github.com/AdrianoKF/duckdb-haystack.git"
@@ -25,7 +33,7 @@ uv pip install "duckdb-haystack @ git+https://github.com/AdrianoKF/duckdb-haysta
 
 ## Usage
 
-### 1) DocumentStore CRUD example
+### Direct use of DuckDBDocumentStore
 
 ```python
 from haystack import Document
@@ -55,7 +63,7 @@ store.delete_documents(document_ids=["doc-2"])
 print("After deletion:", store.filter_documents())
 ```
 
-### 2) Retrieval with DuckDBRetriever in a pipeline
+### Retrieval with DuckDBRetriever
 
 ```python
 from haystack import Document, Pipeline
